@@ -1,0 +1,20 @@
+name: Deploy Backend
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Build JAR
+        run: ./gradlew clean build
+
+      - name: Deploy to Server
+        run: |
+          cp build/libs/*.jar /opt/backend-app/app.jar
+          sudo systemctl restart backend
