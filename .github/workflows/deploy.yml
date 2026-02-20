@@ -25,30 +25,44 @@ jobs:
     - name: Copy JAR to app directory
       run: |
         sudo mkdir -p /opt/backend-app
-        sudo cp build/libs/*.jar /opt/backend-app/app.jar
+
+        # Ensure JAR exists
+        JAR_FILE=$(ls build/libs/*.jar | head -n 1)
+        if [ -z "$JAR_FILE" ]; then
+          echo "ERROR: No JAR found in build/libs!"
+          exit 1
+        fi
+
+        # Copy and rename to app.jar
+        sudo cp "$JAR_FILE" /opt/backend-app/app.jar
         sudo chown ubuntu:ubuntu /opt/backend-app/app.jar
+        echo "Copied $JAR_FILE to /opt/backend-app/app.jar"
 
     - name: Restart Spring Boot service
       run: |
-        sudo systemctl daemon-reload
-        sudo systemctl restart backend-app.service || \
-        echo "[INFO] Service not found. Creating a new systemd service." && \
-        echo "[Unit]
-        Description=Backend Product API
-        After=network.target
+        SERVICE_FILE=/etc/systemd/system/backend-app.service
 
-        [Service]
-        User=ubuntu
-        ExecStart=/usr/bin/java -jar /opt/backend-app/app.jar
-        SuccessExitStatus=143
-        Restart=always
-        RestartSec=5
+        if ! sudo systemctl list-units --full -all | grep -q "backend-app.service"; then
+          echo "[INFO] Creating systemd service for backend-app"
+          echo "[Unit]
+          Description=Backend Product API
+          After=network.target
 
-        [Install]
-        WantedBy=multi-user.target" | sudo tee /etc/systemd/system/backend-app.service
+          [Service]
+          User=ubuntu
+          ExecStart=/usr/bin/java -jar /opt/backend-app/app.jar
+          SuccessExitStatus=143
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target" | sudo tee $SERVICE_FILE
+        fi
+
         sudo systemctl daemon-reload
         sudo systemctl enable backend-app.service
         sudo systemctl restart backend-app.service
+        echo "[INFO] backend-app.service restarted successfully"
 
     - name: Show logs
       run: sudo journalctl -u backend-app.service -n 20 --no-pager
